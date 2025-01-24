@@ -13,30 +13,29 @@ import (
 var dataMutex sync.RWMutex // Мьютекс для управления доступом к data.txt
 
 func main() {
-	port := "20059" // Устанавливаем порт на 20059
-	mux := http.NewServeMux()
+    port := "20059" // Устанавливаем порт на 20059
+    mux := http.NewServeMux()
 
-	// Обслуживаем статические файлы из папки "site_c"
-	fs := http.FileServer(http.Dir("./site_c"))
-	mux.Handle("/", fs)
+    // Обслуживаем статические файлы из папки "site_c"
+    fs := http.FileServer(http.Dir("./site_c"))
+    mux.Handle("/", fs)
 
-	// Обслуживаем загруженные изображения из папки "uploads"
-	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
+    // Обслуживаем загруженные изображения из папки "uploads"
+    mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
 
-	// Обработчик для data.txt с использованием мьютекса
-	mux.HandleFunc("/data.txt", dataHandler)
+    // Обработчик для data.txt с использованием мьютекса
+    mux.HandleFunc("/data.txt", dataHandler)
 
-	// Обработчик для загрузки файлов
-	mux.HandleFunc("/upload", uploadHandler)
+    // Обработчик для загрузки файлов
+    mux.HandleFunc("/upload", uploadHandler)
 
-	// Обработчик для удаления изображений
-	mux.HandleFunc("/delete", deleteHandler)
+    // Обработчик для удаления изображений
+    mux.HandleFunc("/delete", deleteHandler)
 
-	// Запускаем сервер
-	log.Println("Сервер запущен на порту:" + port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		os.Exit(1)
-	}
+    log.Println("Сервер запущен на порт :" + port)
+    if err := http.ListenAndServe(":"+port, mux); err != nil {
+        log.Fatal(err)
+    }
 }
 
 // Обработчик для загрузки файлов
@@ -60,24 +59,28 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		defer file.Close()
 
-		// Проверяем тип файла
+		// Читаем первые 512 байт для определения типа контента
 		buffer := make([]byte, 512)
 		bytesRead, err := file.Read(buffer)
 		if err != nil {
 			http.Error(w, "Ошибка при чтении файла", http.StatusInternalServerError)
 			return
 		}
+
+		// Определяем тип контента файла
 		contentType := http.DetectContentType(buffer[:bytesRead])
 		if !strings.HasPrefix(contentType, "image/") {
 			http.Error(w, "Можно загружать только изображения", http.StatusBadRequest)
 			return
 		}
+
+		// Возвращаемся к началу файла после чтения
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			http.Error(w, "Ошибка при обработке файла", http.StatusInternalServerError)
 			return
 		}
 
-		// Проверяем расширение файла
+		// Проверяем расширение файла (необязательно, но может быть полезно)
 		allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif"}
 		fileExtension := strings.ToLower(filepath.Ext(handler.Filename))
 		isValidExtension := false
@@ -92,36 +95,25 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Сохраняем файл
-		uploadsDir := "./uploads"
-		err = os.MkdirAll(uploadsDir, os.ModePerm)
-		if err != nil {
-			http.Error(w, "Не удалось создать каталог для загрузок", http.StatusInternalServerError)
-			return
-		}
-
+		// Сохраняем файл в папку "uploads"
+		os.MkdirAll("uploads", os.ModePerm)
 		filename := filepath.Base(handler.Filename)
-		dstPath := filepath.Join(uploadsDir, filename)
+		dstPath := filepath.Join("uploads", filename)
 		dst, err := os.Create(dstPath)
 		if err != nil {
 			http.Error(w, "Не удалось сохранить файл", http.StatusInternalServerError)
 			return
 		}
 		defer dst.Close()
-		_, err = io.Copy(dst, file)
-		if err != nil {
-			http.Error(w, "Ошибка при сохранении файла", http.StatusInternalServerError)
-			return
-		}
+		io.Copy(dst, file)
 
-		// Сохраняем данные о позиции и имени файла в data.txt
+		// Сохраняем данные о поиции и имени файла в data.txt
 		positionData := x + "," + y + "," + filename
 
-		dataMutex.Lock()
+		dataMutex.Lock() // Блокируем доступ к data.txt для записи
 		defer dataMutex.Unlock()
 
-		dataFilePath := "./data.txt"
-		f, err := os.OpenFile(dataFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		f, err := os.OpenFile("data.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			http.Error(w, "Не удалось открыть файл данных", http.StatusInternalServerError)
 			return
@@ -142,7 +134,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 // Обработчик для data.txt с использованием мьютекса
 func dataHandler(w http.ResponseWriter, r *http.Request) {
-	dataMutex.RLock()
+	dataMutex.RLock() // Блокируем для чтения
 	defer dataMutex.RUnlock()
 	http.ServeFile(w, r, "./data.txt")
 }
@@ -156,18 +148,18 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dataMutex.Lock()
+		dataMutex.Lock() // Блокируем для записи
 		defer dataMutex.Unlock()
 
-		// Удаляем изображение
-		err := os.Remove(filepath.Join("./uploads", filename))
+		// Удаляем изображение из папки uploads
+		err := os.Remove(filepath.Join("uploads", filename))
 		if err != nil {
 			http.Error(w, "Не удалось удалить файл", http.StatusInternalServerError)
 			return
 		}
 
-		// Обновляем data.txt
-		dataBytes, err := os.ReadFile("./data.txt")
+		// Удаляем соответствующую запись из data.txt
+		dataBytes, err := os.ReadFile("data.txt")
 		if err != nil {
 			http.Error(w, "Не удалось прочитать файл данных", http.StatusInternalServerError)
 			return
@@ -179,7 +171,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 				newLines = append(newLines, line)
 			}
 		}
-		err = os.WriteFile("./data.txt", []byte(strings.Join(newLines, "\n")), 0644)
+		err = os.WriteFile("data.txt", []byte(strings.Join(newLines, "\n")), 0644)
 		if err != nil {
 			http.Error(w, "Не удалось записать файл данных", http.StatusInternalServerError)
 			return
