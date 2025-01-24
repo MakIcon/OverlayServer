@@ -20,15 +20,6 @@ func main() {
 	// Обслуживаем загруженные изображения из папки "uploads"
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
 
-	// Обработчик для data.txt с использованием мьютекса
-	http.HandleFunc("/data.txt", dataHandler)
-
-	// Обработчик для загрузки файлов
-	http.HandleFunc("/upload", uploadHandler)
-
-	// Обработчик для удаления изображений
-	http.HandleFunc("/delete", deleteHandler)
-
 	log.Println("Сервер запущен на :20845")
 	log.Fatal(http.ListenAndServe(":20845", nil))
 }
