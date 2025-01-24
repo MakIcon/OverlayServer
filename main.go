@@ -7,13 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
-
-var dataMutex sync.RWMutex // Мьютекс для управления доступом к data.txt
 
 func main() {
 	http.Handle("/", http.FileServer(http.Dir("./site_c")))
+	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
+	http.HandleFunc("/data.txt", dataHandler)
+	http.HandleFunc("/upload", uploadHandler)
+	http.HandleFunc("/delete", deleteHandler)
 
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":20059", nil))
@@ -88,11 +89,8 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		defer dst.Close()
 		io.Copy(dst, file)
 
-		// Сохраняем данные о поиции и имени файла в data.txt
+		// Сохраняем данные о позиции и имени файла в data.txt
 		positionData := x + "," + y + "," + filename
-
-		dataMutex.Lock() // Блокируем доступ к data.txt для записи
-		defer dataMutex.Unlock()
 
 		f, err := os.OpenFile("data.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
@@ -113,10 +111,8 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Обработчик для data.txt с использованием мьютекса
+// Обработчик для data.txt
 func dataHandler(w http.ResponseWriter, r *http.Request) {
-	dataMutex.RLock() // Блокируем для чтения
-	defer dataMutex.RUnlock()
 	http.ServeFile(w, r, "./data.txt")
 }
 
@@ -128,9 +124,6 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Параметр 'filename' отсутствует", http.StatusBadRequest)
 			return
 		}
-
-		dataMutex.Lock() // Блокируем для записи
-		defer dataMutex.Unlock()
 
 		// Удаляем изображение из папки uploads
 		err := os.Remove(filepath.Join("uploads", filename))
