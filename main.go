@@ -16,10 +16,7 @@ func main() {
 	// Обслуживаем статические файлы из папки "site_c"
 	fs := http.FileServer(http.Dir("./site_c"))
 	http.Handle("/", fs)
-
-	// Обслуживаем загруженные изображения из папки "uploads"
-	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
-
+	
 	log.Println("Сервер запущен на :20845")
 	log.Fatal(http.ListenAndServe(":20845", nil))
 }
