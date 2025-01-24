@@ -1,7 +1,6 @@
 package main
 
 import (
-	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -11,28 +10,14 @@ import (
 )
 
 func main() {
-	port := "20059"
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", indexHandler) // Обрабатываем корневой URL с помощью indexHandler
-	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
-	mux.HandleFunc("/data.txt", dataHandler)
-	mux.HandleFunc("/upload", uploadHandler)
-	mux.HandleFunc("/delete", deleteHandler)
+	http.Handle("/", http.FileServer(http.Dir("./site_c")))
+	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
+	http.HandleFunc("/data.txt", dataHandler)
+	http.HandleFunc("/upload", uploadHandler)
+	http.HandleFunc("/delete", deleteHandler)
 
-	log.Println("Сервер запущен на порту :" + port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatal(err)
-	}
-}
-
-// Обработчик для корневого URL, выводящий in.html из папки site_c
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("site_c/in.html")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	tmpl.Execute(w, nil)
+	log.Println("Server started on :8080")
+	log.Fatal(http.ListenAndServe(":20059", nil))
 }
 
 // Обработчик для загрузки файлов
@@ -77,12 +62,12 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Проверяем расширение файла
+		// Проверяем расширение файла (необязательно, но может быть полезно)
 		allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif"}
 		fileExtension := strings.ToLower(filepath.Ext(handler.Filename))
 		isValidExtension := false
 		for _, ext := range allowedExtensions {
-			if ext == fileExtesion {
+			if ext == fileExtension {
 				isValidExtension = true
 				break
 			}
@@ -160,7 +145,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 				newLines = append(newLines, line)
 			}
 		}
-		err = os.WriteFile("data.txt", []byte(strings.Join(newLines, "\n")), 0644)
+		err = os.WriteFile("data.txt", []byte(strings.Join(newLines, "\n")), 0777)
 		if err != nil {
 			http.Error(w, "Не удалось записать файл данных", http.StatusInternalServerError)
 			return
