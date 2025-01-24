@@ -8,7 +8,7 @@ import (
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Указываем путь к файлу in.html в папке site_c
-	tmpl, err := template.ParseFiles("site_c/in.html")
+	tmpl, err := template.ParseFiles("site_c/index.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
