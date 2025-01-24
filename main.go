@@ -77,13 +77,8 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Проверяем, существует ли папка "uploads"
-		if _, err := os.Stat("uploads"); os.IsNotExist(err) {
-			http.Error(w, "Директория 'uploads' не найдена", http.StatusInternalServerError)
-			return
-		}
-
 		// Сохраняем файл в папку "uploads"
+		os.MkdirAll("uploads", os.ModePerm)
 		filename := filepath.Base(handler.Filename)
 		dstPath := filepath.Join("uploads", filename)
 		dst, err := os.Create(dstPath)
@@ -94,22 +89,15 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		defer dst.Close()
 		io.Copy(dst, file)
 
-		// Проверяем, существует ли файл "data.txt"
-		if _, err := os.Stat("data.txt"); os.IsNotExist(err) {
-			http.Error(w, "Файл 'data.txt' не найден", http.StatusInternalServerError)
-			return
-		}
+		// Сохраняем данные о позиции и имени файла в data.txt
+		positionData := x + "," + y + "," + filename
 
-		// Открываем файл "data.txt" для записи без создания нового
-		f, err := os.OpenFile("data.txt", os.O_APPEND|os.O_WRONLY, 0644)
+		f, err := os.OpenFile("data.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			http.Error(w, "Не удалось открыть файл 'data.txt'", http.StatusInternalServerError)
+			http.Error(w, "Не удалось открыть файл данных", http.StatusInternalServerError)
 			return
 		}
 		defer f.Close()
-
-		// Сохраняем данные о позиции и имени файла в data.txt
-		positionData := x + "," + y + "," + filename
 		_, err = f.WriteString(positionData + "\n")
 		if err != nil {
 			http.Error(w, "Не удалось записать данные позиции", http.StatusInternalServerError)
@@ -125,12 +113,6 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 // Обработчик для data.txt
 func dataHandler(w http.ResponseWriter, r *http.Request) {
-	// Проверяем, существует ли файл "data.txt"
-	if _, err := os.Stat("data.txt"); os.IsNotExist(err) {
-		http.Error(w, "Файл 'data.txt' не найден", http.StatusInternalServerError)
-		return
-	}
-
 	http.ServeFile(w, r, "./data.txt")
 }
 
@@ -143,24 +125,10 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		uploadPath := filepath.Join("uploads", filename)
-
-		// Проверяем, существует ли файл в директории "uploads"
-		if _, err := os.Stat(uploadPath); os.IsNotExist(err) {
-			http.Error(w, "Файл не найден в директории 'uploads'", http.StatusNotFound)
-			return
-		}
-
 		// Удаляем изображение из папки uploads
-		err := os.Remove(uploadPath)
+		err := os.Remove(filepath.Join("uploads", filename))
 		if err != nil {
 			http.Error(w, "Не удалось удалить файл", http.StatusInternalServerError)
-			return
-		}
-
-		// Проверяем, существует ли файл "data.txt"
-		if _, err := os.Stat("data.txt"); os.IsNotExist(err) {
-			http.Error(w, "Файл 'data.txt' не найден", http.StatusInternalServerError)
 			return
 		}
 
@@ -177,7 +145,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 				newLines = append(newLines, line)
 			}
 		}
-		err = os.WriteFile("data.txt", []byte(strings.Join(newLines, "\n")), 0644)
+		err = os.WriteFile("data.txt", []byte(strings.Join(newLines, "\n")), 0777)
 		if err != nil {
 			http.Error(w, "Не удалось записать файл данных", http.StatusInternalServerError)
 			return
