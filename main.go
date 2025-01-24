@@ -13,29 +13,14 @@ import (
 var dataMutex sync.RWMutex // Мьютекс для управления доступом к data.txt
 
 func main() {
-    port := "20059" // Устанавливаем порт на 20059
-    mux := http.NewServeMux()
+	http.Handle("/", http.FileServer(http.Dir("./site_c")))
+	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
+	http.HandleFunc("/data.txt", dataHandler)
+	http.HandleFunc("/upload", uploadHandler)
+	http.HandleFunc("/delete", deleteHandler)
 
-    // Обслуживаем статические файлы из папки "site_c"
-    fs := http.FileServer(http.Dir("./site_c"))
-    mux.Handle("/", fs)
-
-    // Обслуживаем загруженные изображения из папки "uploads"
-    mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
-
-    // Обработчик для data.txt с использованием мьютекса
-    mux.HandleFunc("/data.txt", dataHandler)
-
-    // Обработчик для загрузки файлов
-    mux.HandleFunc("/upload", uploadHandler)
-
-    // Обработчик для удаления изображений
-    mux.HandleFunc("/delete", deleteHandler)
-
-    log.Println("Сервер запущен на порт :" + port)
-    if err := http.ListenAndServe(":"+port, mux); err != nil {
-        log.Fatal(err)
-    }
+	log.Println("Server started on :8080")
+	log.Fatal(http.ListenAndServe(":20059", nil))
 }
 
 // Обработчик для загрузки файлов
@@ -171,7 +156,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 				newLines = append(newLines, line)
 			}
 		}
-		err = os.WriteFile("data.txt", []byte(strings.Join(newLines, "\n")), 0644)
+		err = os.WriteFile("data.txt", []byte(strings.Join(newLines, "\n")), 0777)
 		if err != nil {
 			http.Error(w, "Не удалось записать файл данных", http.StatusInternalServerError)
 			return
