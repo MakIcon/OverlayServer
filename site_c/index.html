@@ -7,24 +7,25 @@
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
+            display: flex;
+        }
+        #container {
+            display: flex;
+            flex-direction: column;
         }
         #rectangle {
             width: 640px;
             height: 360px;
             background-color: lightgray;
             position: relative;
-            margin-bottom: 20px;
             border: 1px solid #ccc;
             cursor: crosshair;
         }
-        #rectangle div.marker {
-            width: 10px;
-            height: 10px;
-            background-color: red;
+        #rectangle .preview {
             position: absolute;
+            background-color: rgba(0, 255, 0, 0.3);
+            border: 2px solid green;
             pointer-events: none;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
         }
         #dropzone {
             width: 640px;
@@ -34,96 +35,199 @@
             text-align: center;
             color: #ccc;
             font-size: 18px;
-            margin-bottom: 20px;
+            margin-top: 20px;
             transition: border-color 0.3s, color 0.3s;
         }
         #dropzone.hover {
             border-color: green;
             color: green;
         }
+        #controls {
+            margin-left: 20px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
         #message {
             font-weight: bold;
             color: red;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
-    <h1>Выберите позицию и загрузите изображение</h1>
-    <div id="rectangle"></div>
-    <div id="dropzone">Перетащите изображение сюда</div>
-    <div id="message"></div>
+    <div id="container">
+        <div id="rectangle">
+            <div class="preview"></div>
+        </div>
+        <div id="dropzone">Перетащите изображение сюда</div>
+        <div id="message"></div>
+    </div>
+    <div id="controls">
+        <div class="control-group">
+            <label>X:
+                <input type="number" id="inputX" min="0" max="1" step="0.01" value="0.5">
+            </label>
+        </div>
+        <div class="control-group">
+            <label>Y:
+                <input type="number" id="inputY" min="0" max="1" step="0.01" value="0.5">
+            </label>
+        </div>
+        <div class="control-group">
+            <label>Ширина:
+                <input type="number" id="inputWidth" value="128" min="128" max="1024">
+                <input type="range" id="sliderWidth" min="128" max="1024" value="128">
+            </label>
+        </div>
+        <div class="control-group">
+            <label>Высота:
+                <input type="number" id="inputHeight" value="128" min="128" max="1024">
+                <input type="range" id="sliderHeight" min="128" max="1024" value="128">
+            </label>
+        </div>
+    </div>
 
     <script>
-        let position = null;
         const rectangle = document.getElementById('rectangle');
+        const preview = rectangle.querySelector('.preview');
+
+        const inputX = document.getElementById('inputX');
+        const inputY = document.getElementById('inputY');
+        const inputWidth = document.getElementById('inputWidth');
+        const inputHeight = document.getElementById('inputHeight');
+
+        const sliderWidth = document.getElementById('sliderWidth');
+        const sliderHeight = document.getElementById('sliderHeight');
+
         const dropzone = document.getElementById('dropzone');
         const message = document.getElementById('message');
 
-        rectangle.addEventListener('click', function(event) {
-            rectangle.innerHTML = ''; // Очищаем предыдущий маркер
-            const rect = rectangle.getBoundingClientRect();
-            let posX = (event.clientX - rect.left) / rect.width;
-            let posY = (event.clientY - rect.top) / rect.height;
+        let position = { x: parseFloat(inputX.value), y: parseFloat(inputY.value) };
+        let size = { width: parseInt(inputWidth.value), height: parseInt(inputHeight.value) };
 
-            let marker = document.createElement('div');
-            marker.classList.add('marker');
-            marker.style.left = (posX * 100) + '%';
-            marker.style.top = (posY * 100) + '%';
-            rectangle.appendChild(marker);
+        function updatePreview() {
+            const rectWidth = rectangle.offsetWidth;
+            const rectHeight = rectangle.offsetHeight;
 
-            position = { x: posX.toFixed(4), y: posY.toFixed(4) };
-            message.textContent = ''; // Очищаем сообщение об ошибке
-        });
+            position.x = Math.max(0, Math.min(1, position.x));
+            position.y = Math.max(0, Math.min(1, position.y));
 
-        dropzone.addEventListener('dragover', function(event) {
-            event.preventDefault();
-            dropzone.classList.add('hover');
-        });
+            size.width = Math.max(128, Math.min(1024, size.width));
+            size.height = Math.max(128, Math.min(1024, size.height));
 
-        dropzone.addEventListener('dragleave', function(event) {
-            dropzone.classList.remove('hover');
-        });
+            inputX.value = position.x.toFixed(4);
+            inputY.value = position.y.toFixed(4);
 
-        dropzone.addEventListener('drop', function(event) {
-            event.preventDefault();
-            dropzone.classList.remove('hover');
-            const files = event.dataTransfer.files;
+            inputWidth.value = size.width;
+            inputHeight.value = size.height;
 
-            if (files.length > 0 && position) {
-                const formData = new FormData();
-                formData.append('image', files[0]);
-                formData.append('x', position.x);
-                formData.append('y', position.y);
+            sliderWidth.value = size.width;
+            sliderHeight.value = size.height;
 
-                fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                }).then(response => {
-                    if (response.ok) {
-                        alert('Изображение успешно загружено.');
-                        position = null;
-                        rectangle.innerHTML = '';
-                    } else {
-                        response.text().then(text => {
-                            alert('Ошибка: ' + text);
-                        });
-                    }
-                }).catch(error => {
-                    console.error('Ошибка:', error);
-                    alert('Произошла ошибка при отправке данных на сервер.');
-                });
-            } else {
-                alert('Пожалуйста, выберите позицию и изображение.');
-            }
-        });
+            const left = position.x * rectWidth - (size.width * 0.1) / 2;
+            const top = position.y * rectHeight - (size.height * 0.1) / 2;
 
-        // Предотвращаем открытие файла в браузере при случайном броске вне dropzone
-        document.addEventListener('dragover', function(event) {
-            event.preventDefault();
-        });
-        document.addEventListener('drop', function(event) {
-            event.preventDefault();
-        });
-    </script>
+            preview.style.left = `${left}px`;
+            preview.style.top = `${top}px`;
+
+           // Уменьшаем ширину и высоту на 90%
+           preview.style.width = `${size.width * 0.1}px`;
+           preview.style.height = `${size.height * 0.1}px`;
+       }
+
+       rectangle.addEventListener('click', function(event) {
+           const rect = rectangle.getBoundingClientRect();
+           position.x = (event.clientX - rect.left) / rect.width;
+           position.y = (event.clientY - rect.top) / rect.height;
+           updatePreview();
+           message.textContent = '';
+       });
+
+       inputX.addEventListener('input', function() {
+           position.x = parseFloat(inputX.value);
+           updatePreview();
+       });
+
+       inputY.addEventListener('input', function() {
+           position.y = parseFloat(inputY.value);
+           updatePreview();
+       });
+
+       inputWidth.addEventListener('input', function() {
+           size.width = parseInt(inputWidth.value);
+           updatePreview();
+       });
+
+       sliderWidth.addEventListener('input', function() {
+           size.width = parseInt(sliderWidth.value);
+           updatePreview();
+       });
+
+       inputHeight.addEventListener('input', function() {
+           size.height = parseInt(inputHeight.value);
+           updatePreview();
+       });
+
+       sliderHeight.addEventListener('input', function() {
+           size.height = parseInt(sliderHeight.value);
+           updatePreview();
+       });
+
+       dropzone.addEventListener('dragover', function(event) {
+           event.preventDefault();
+           dropzone.classList.add('hover');
+       });
+
+       dropzone.addEventListener('dragleave', function(event) {
+           dropzone.classList.remove('hover');
+       });
+
+       dropzone.addEventListener('drop', function(event) {
+           event.preventDefault();
+           dropzone.classList.remove('hover');
+           const files = event.dataTransfer.files;
+
+           if (files.length > 0 && position) {
+               const formData = new FormData();
+               formData.append('image', files[0]);
+               formData.append('x', position.x);
+               formData.append('y', position.y);
+               formData.append('width', size.width);
+               formData.append('height', size.height);
+
+               fetch('/upload', {
+                   method: 'POST',
+                   body: formData
+               }).then(response => {
+                   if (response.ok) {
+                       alert('Изображение успешно загружено.');
+                       position = { x: 0.5, y: 0.5 };
+                       size = { width: 128, height: 128 };
+                       updatePreview();
+                   } else {
+                       response.text().then(text => {
+                           alert('Ошибка: ' + text);
+                       });
+                   }
+               }).catch(error => {
+                   console.error('Ошибка:', error);
+                   alert('Произошла ошибка при отправке данных на сервер.');
+               });
+           } else {
+               alert('Пожалуйста, выберите позицию и изображение.');
+           }
+       });
+
+       document.addEventListener('dragover', function(event) {
+           event.preventDefault();
+       });
+
+       document.addEventListener('drop', function(event) {
+           event.preventDefault();
+       });
+
+       updatePreview();
+   </script>
 </body>
 </html>
