@@ -7,29 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
-var dataMutex sync.RWMutex // Мьютекс для управления доступом к data.txt
-
 func main() {
-	// Обслуживаем статические файлы из папки "site_c"
-	fs := http.FileServer(http.Dir("./site_c"))
-	http.Handle("/", fs)
-
-	// Обслуживаем загруженные изображения из папки "uploads"
+	http.Handle("/", http.FileServer(http.Dir("./site_c")))
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
-
-	// Обработчик для data.txt с использованием мьютекса
 	http.HandleFunc("/data.txt", dataHandler)
-
-	// Обработчик для загрузки файлов
 	http.HandleFunc("/upload", uploadHandler)
-
-	// Обработчик для удаления изображений
 	http.HandleFunc("/delete", deleteHandler)
 
-	log.Println("Сервер запущен на :8080")
+	log.Println("Server started on :20059")
 	log.Fatal(http.ListenAndServe(":20059", nil))
 }
 
@@ -38,13 +25,15 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		err := r.ParseMultipartForm(10 << 20) // до 10 МБ
 		if err != nil {
-			http.Error(w, "Ошибка при обработке данных формы", http.StatusBadRequest)
+			http.Error(w, "Ошибка при обработке данныхформы", http.StatusBadRequest)
 			return
 		}
 
-		// Получаем позицию
+		// Получаем позицию и размер
 		x := r.FormValue("x")
 		y := r.FormValue("y")
+		width := r.FormValue("width")
+		height := r.FormValue("height")
 
 		// Получаем загруженный файл
 		file, handler, err := r.FormFile("image")
@@ -58,7 +47,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		buffer := make([]byte, 512)
 		bytesRead, err := file.Read(buffer)
 		if err != nil {
-			http.Error(w, "Ошибка при чтении файла", http.StatusInternalServerError)
+			http.Error(w, "Ошибка при чтении фйла", http.StatusInternalServerError)
 			return
 		}
 
@@ -76,10 +65,10 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Проверяем расширение файла (необязательно, но может быть полезно)
-		allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif"}
+		allowedExtesions := []string{".jpg", ".jpeg", ".png", ".gif"}
 		fileExtension := strings.ToLower(filepath.Ext(handler.Filename))
 		isValidExtension := false
-		for _, ext := range allowedExtensions {
+		for _, ext := range allowedExtesions {
 			if ext == fileExtension {
 				isValidExtension = true
 				break
@@ -102,11 +91,8 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		defer dst.Close()
 		io.Copy(dst, file)
 
-		// Сохраняем данные о поиции и имени файла в data.txt
-		positionData := x + "," + y + "," + filename
-
-		dataMutex.Lock() // Блокируем доступ к data.txt для записи
-		defer dataMutex.Unlock()
+		// Сохраняем данные о позиции и размере в data.txt
+		positionData := x + "," + y + "," + width + "," + height + "," + filename
 
 		f, err := os.OpenFile("data.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
@@ -127,10 +113,8 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Обработчик для data.txt с использованием мьютекса
+// Обработчик для data.txt
 func dataHandler(w http.ResponseWriter, r *http.Request) {
-	dataMutex.RLock() // Блокируем для чтения
-	defer dataMutex.RUnlock()
 	http.ServeFile(w, r, "./data.txt")
 }
 
@@ -142,9 +126,6 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Параметр 'filename' отсутствует", http.StatusBadRequest)
 			return
 		}
-
-		dataMutex.Lock() // Блокируем для записи
-		defer dataMutex.Unlock()
 
 		// Удаляем изображение из папки uploads
 		err := os.Remove(filepath.Join("uploads", filename))
